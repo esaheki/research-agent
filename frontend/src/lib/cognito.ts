@@ -120,6 +120,15 @@ export function clearTokens(): void {
   sessionStorage.removeItem(CODE_VERIFIER_KEY)
 }
 
+export function redirectToLogout(): void {
+  clearTokens()
+  const params = new URLSearchParams({
+    client_id: config.cognitoClientId,
+    logout_uri: `${window.location.origin}/research`,
+  })
+  window.location.href = `https://${config.cognitoDomain}/logout?${params.toString()}`
+}
+
 export function getUserIdFromToken(idToken: string): string {
   try {
     const payload = idToken.split('.')[1]

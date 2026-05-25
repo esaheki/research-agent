@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { clearTokens, getStoredTokens, getUserIdFromToken, redirectToLogin } from '../lib/cognito'
+import { clearTokens, getStoredTokens, getUserIdFromToken, redirectToLogin, redirectToLogout } from '../lib/cognito'
 
 interface AuthState {
   isAuthenticated: boolean
@@ -41,8 +41,7 @@ export function useAuth(): AuthState & { logout: () => void } {
   }, [])
 
   function logout(): void {
-    clearTokens()
-    setState({ isAuthenticated: false, userId: null, idToken: null, isLoading: false })
+    redirectToLogout()
   }
 
   return { ...state, logout }
