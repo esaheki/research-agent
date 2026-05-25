@@ -46,6 +46,7 @@ export class DurableOrchestrator extends Construct {
       bundling: props.bundling ?? { minify: true, sourceMap: false },
       timeout: props.timeout ?? cdk.Duration.minutes(12),
       memorySize: props.memorySize ?? 512,
+      tracing: lambda.Tracing.ACTIVE,
       environment: { ...props.environment, ...activityEnv },
     })
 

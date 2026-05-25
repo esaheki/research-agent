@@ -215,9 +215,9 @@ curl -I https://esaheki.com/research/reports/some-uuid/report.md
 X-Ray tracing, structured logging, and the CloudWatch dashboard.
 
 **Tasks:**
-- [ ] Enable X-Ray active tracing on all Lambda functions and both API Gateway stages in CDK
-- [ ] Confirm all Lambda handlers emit structured JSON logs with at minimum `{ sessionId, userId, step, durationMs }`
-- [ ] `infra/lib/constructs/dashboard.ts` — CloudWatch dashboard `ResearchAgentDashboard` with widgets: active sessions, completion rate, p50/p95 research duration, error rate by function, estimated token cost
+- [x] Enable X-Ray active tracing on all Lambda functions and both API Gateway stages in CDK
+- [x] Confirm all Lambda handlers emit structured JSON logs with at minimum `{ sessionId, userId, step, durationMs }`
+- [x] `infra/lib/constructs/dashboard.ts` — CloudWatch dashboard `ResearchAgentDashboard` with widgets: active sessions, completion rate, p50/p95 research duration, error rate by function, estimated token cost
 
 **Verification:**
 ```bash

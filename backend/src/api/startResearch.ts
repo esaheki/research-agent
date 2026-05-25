@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { randomUUID } from 'crypto'
+import { log } from '../lib/logger'
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}))
 const lambda = new LambdaClient({})
@@ -61,6 +62,8 @@ export const handler: APIGatewayProxyHandlerV2WithJWTAuthorizer = async (event) 
       Payload: JSON.stringify({ sessionId, userId, question }),
     }),
   )
+
+  log({ step: 'research_started', sessionId, userId })
 
   return {
     statusCode: 200,

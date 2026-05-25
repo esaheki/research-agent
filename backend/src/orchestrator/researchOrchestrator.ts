@@ -2,6 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { emitEvent } from '../lib/events'
+import { log } from '../lib/logger'
 import { TavilyResult } from '../activities/tavilySearch'
 import { ExtractionResult } from '../activities/extractKeyPoints'
 import { FetchPageResult } from '../activities/fetchPage'
@@ -79,6 +80,8 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
   }
 
   await updateSessionStatus(SESSIONS_TABLE, sessionId, 'running')
+  const orchestratorStart = Date.now()
+  log({ step: 'orchestrator_start', sessionId, userId, question })
 
   try {
     // Step 1: Decompose query
@@ -172,10 +175,24 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
     }
 
     await updateSessionStatus(SESSIONS_TABLE, sessionId, finalStatus)
+    log({
+      step: 'orchestrator_complete',
+      sessionId,
+      userId,
+      status: finalStatus,
+      durationMs: Date.now() - orchestratorStart,
+    })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     await emitEvent(ddb, EVENTS_TABLE, sessionId, 'ERROR', { step: 'orchestrator', message })
     await updateSessionStatus(SESSIONS_TABLE, sessionId, 'failed')
+    log({
+      step: 'orchestrator_failed',
+      sessionId,
+      userId,
+      error: message,
+      durationMs: Date.now() - orchestratorStart,
+    })
     throw err
   }
 }

@@ -16,6 +16,7 @@ import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations
 import { Construct } from 'constructs'
 import { SSM } from '../config'
 import { DurableOrchestrator } from '../constructs/durable-orchestrator'
+import { ResearchAgentDashboard } from '../constructs/dashboard'
 
 // Root of the repo, used to resolve backend source paths
 const REPO_ROOT = path.join(__dirname, '../../..')
@@ -41,6 +42,7 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       bundling: { minify: true, sourceMap: false },
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
+      tracing: lambda.Tracing.ACTIVE,
     }
 
     // SSM param ARNs for IAM grants
@@ -307,6 +309,11 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       apiId: wsApi.ref,
       stageName: 'prod',
       autoDeploy: true,
+      defaultRouteSettings: {
+        detailedMetricsEnabled: true,
+        throttlingBurstLimit: 100,
+        throttlingRateLimit: 50,
+      },
     })
     wsStage.addDependency(wsConnectRoute)
     wsStage.addDependency(wsDisconnectRoute)
@@ -460,6 +467,41 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       methods: [apigwv2.HttpMethod.POST],
       integration: new HttpLambdaIntegration('ChatWithReportIntegration', chatWithReportFn),
       authorizer: jwtAuthorizer,
+    })
+
+    // ── Phase 8: API Gateway detailed metrics ─────────────────────────────
+    // HTTP API (L2 stage, accessed via escape hatch)
+    const cfnHttpStage = researchApi.defaultStage!.node.defaultChild as apigwv2.CfnStage
+    cfnHttpStage.addPropertyOverride('DefaultRouteSettings.DetailedMetricsEnabled', true)
+
+    // ── Phase 8: CloudWatch dashboard ─────────────────────────────────────
+    const allFunctions: lambda.Function[] = [
+      postAuthFn,
+      preTokenGenFn,
+      listUsersFn,
+      updateUserStatusFn,
+      decomposeQueryFn,
+      tavilySearchFn,
+      rankUrlsFn,
+      fetchPageFn,
+      extractKeyPointsFn,
+      synthesizeReportFn,
+      persistReportFn,
+      orchestrator.handler,
+      eventBroadcasterFn,
+      wsConnectFn,
+      wsDisconnectFn,
+      startResearchFn,
+      cancelResearchFn,
+      listSessionsFn,
+      getSessionFn,
+      chatWithReportFn,
+    ]
+
+    new ResearchAgentDashboard(this, 'Dashboard', {
+      orchestratorFunction: orchestrator.handler,
+      synthesizeReportFunction: synthesizeReportFn,
+      allFunctions,
     })
 
     // ── Outputs ───────────────────────────────────────────────────────────
