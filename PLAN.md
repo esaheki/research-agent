@@ -143,16 +143,16 @@ wscat -c "<WebSocketApiUrl>?token=<valid-cognito-token>&sessionId=test"
 React + Vite SPA with Cognito auth, split-pane research UI, WebSocket client, and report renderer.
 
 **Tasks:**
-- [ ] `frontend/src/lib/cognito.ts` — Cognito Hosted UI redirect helpers, token storage (ID token in memory, refresh token in httpOnly cookie via a thin Lambda proxy), token refresh logic
-- [ ] `frontend/src/hooks/useWebSocket.ts` — connects to API Gateway WebSocket, handles reconnection, dispatches typed `ResearchEvent` objects, replays events on reconnect
-- [ ] `frontend/src/hooks/useResearch.ts` — orchestrates session lifecycle: submit question → POST /research → open WebSocket → accumulate events → derive UI state
-- [ ] `frontend/src/components/EventStream/` — left pane; renders event cards per event type; streams `THINKING_CHUNK` tokens into a collapsible monospace block; auto-scrolls
-- [ ] `frontend/src/components/ReportViewer/` — right pane; renders growing markdown with `[CONFLICT]` markers as highlighted callout blocks; shows partial-report warning banner
-- [ ] `frontend/src/components/SplitPane/` — resizable split-pane layout wrapper
-- [ ] `frontend/src/pages/ResearchPage.tsx` — question input, active session enforcement (cancel modal), wires EventStream + ReportViewer
-- [ ] `frontend/src/pages/HistoryPage.tsx` — lists past sessions from `GET /research/history`, links to session view
-- [ ] `frontend/src/pages/SessionPage.tsx` — loads completed report via `GET /research/:id`, renders it with the Q&A chat panel
-- [ ] Q&A chat panel — sends messages to `POST /research/:id/chat`, streams SSE response
+- [x] `frontend/src/lib/cognito.ts` — Cognito Hosted UI redirect helpers, token storage (ID token in memory, refresh token in httpOnly cookie via a thin Lambda proxy), token refresh logic
+- [x] `frontend/src/hooks/useWebSocket.ts` — connects to API Gateway WebSocket, handles reconnection, dispatches typed `ResearchEvent` objects, replays events on reconnect
+- [x] `frontend/src/hooks/useResearch.ts` — orchestrates session lifecycle: submit question → POST /research → open WebSocket → accumulate events → derive UI state
+- [x] `frontend/src/components/EventStream/` — left pane; renders event cards per event type; streams `THINKING_CHUNK` tokens into a collapsible monospace block; auto-scrolls
+- [x] `frontend/src/components/ReportViewer/` — right pane; renders growing markdown with `[CONFLICT]` markers as highlighted callout blocks; shows partial-report warning banner
+- [x] `frontend/src/components/SplitPane/` — resizable split-pane layout wrapper
+- [x] `frontend/src/pages/ResearchPage.tsx` — question input, active session enforcement (cancel modal), wires EventStream + ReportViewer
+- [x] `frontend/src/pages/HistoryPage.tsx` — lists past sessions from `GET /research/history`, links to session view
+- [x] `frontend/src/pages/SessionPage.tsx` — loads completed report via `GET /research/:id`, renders it with the Q&A chat panel
+- [x] Q&A chat panel — sends messages to `POST /research/:id/chat`, streams SSE response
 
 **Verification:**
 ```bash
