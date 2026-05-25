@@ -505,15 +505,15 @@ export class ResearchAgentComputeStack extends cdk.Stack {
     })
 
     // ── Phase 9: GitHub Actions OIDC deploy role ──────────────────────────
-    const githubOidcProvider = new iam.OpenIdConnectProvider(this, 'GitHubOidcProvider', {
-      url: 'https://token.actions.githubusercontent.com',
-      clientIds: ['sts.amazonaws.com'],
-      // GitHub's OIDC CA thumbprint (stable; see https://github.blog/changelog/2023-06-27-github-actions-update-on-oidc-integration-with-aws/)
-      thumbprints: ['6938fd4d98bab03faadb97b34396831e3780aea1'],
-    })
+    // Import the existing OIDC provider (created manually in the AWS account)
+    const githubOidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+      this,
+      'GitHubOidcProvider',
+      `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
+    )
 
     const deployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
-      roleName: 'ResearchAgentGitHubActionsRole',
+      roleName: 'GitHubActions-ResearchAgent',
       description: 'Assumed by GitHub Actions via OIDC to deploy this project',
       assumedBy: new iam.WebIdentityPrincipal(githubOidcProvider.openIdConnectProviderArn, {
         StringEquals: {
