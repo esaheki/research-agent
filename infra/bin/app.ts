@@ -14,6 +14,10 @@ const storage = new ResearchAgentStorageStack(app, 'ResearchAgentStorageStack', 
 new ResearchAgentComputeStack(app, 'ResearchAgentComputeStack', {
   env,
   approvalsTable: storage.approvalsTable,
+  sessionsTable: storage.sessionsTable,
+  eventsTable: storage.eventsTable,
+  connectionsTable: storage.connectionsTable,
+  assetsBucket: storage.assetsBucket,
 })
 
 // Phase 7: ResearchAgentFrontendStack

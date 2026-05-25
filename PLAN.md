@@ -75,16 +75,16 @@ cd backend && npm run test -- --testPathPattern=cognito
 All activity Lambda functions and the Lambda Durable orchestrator that sequences them.
 
 **Tasks:**
-- [ ] `backend/src/activities/decomposeQuery.ts` — Claude Haiku 4.5 call; returns 3-5 sub-query strings
-- [ ] `backend/src/activities/tavilySearch.ts` — Tavily API call (`search_depth: advanced`, `max_results: 10`); returns `{ url, title, snippet, score }[]`
-- [ ] `backend/src/activities/rankUrls.ts` — Claude Haiku 4.5 call; deduplicates across sub-queries, returns top 8 URLs
-- [ ] `backend/src/activities/fetchPage.ts` — GET `https://r.jina.ai/{url}`; 15s timeout; graceful fallback on error
-- [ ] `backend/src/activities/extractKeyPoints.ts` — Claude Haiku 4.5 call; input truncated to 8K tokens; returns `{ url, keyPoints, relevance, conflictsFound }`
-- [ ] `backend/src/activities/synthesizeReport.ts` — Claude Sonnet 4.6 with `thinking: { type: 'enabled', budget_tokens: 8000 }`; streams `THINKING_CHUNK` and `REPORT_CHUNK` events to `ResearchEvents` table; returns structured markdown
-- [ ] `backend/src/activities/persistReport.ts` — writes `report.md` and `sources/{i}.txt` to S3; updates `Sessions` DynamoDB item to `complete`
-- [ ] `backend/src/orchestrator/researchOrchestrator.ts` — wires all activities into a durable sequence; emits progress events; retry policy (3x, exponential backoff); hard cap: 8 sources, 10-minute timeout; `PARTIAL_COMPLETE` path on activity exhaustion
-- [ ] `backend/src/ws/eventBroadcaster.ts` — DynamoDB Streams handler; posts events to connected WebSocket client via `ApiGatewayManagementApi`
-- [ ] CDK constructs for: all activity Lambdas (Node.js 22, ARM64), `synthesizeReport` at 3008 MB / 10 min, Durable orchestrator construct, `eventBroadcaster` Lambda with DynamoDB Streams event source
+- [x] `backend/src/activities/decomposeQuery.ts` — Claude Haiku 4.5 call; returns 3-5 sub-query strings
+- [x] `backend/src/activities/tavilySearch.ts` — Tavily API call (`search_depth: advanced`, `max_results: 10`); returns `{ url, title, snippet, score }[]`
+- [x] `backend/src/activities/rankUrls.ts` — Claude Haiku 4.5 call; deduplicates across sub-queries, returns top 8 URLs
+- [x] `backend/src/activities/fetchPage.ts` — GET `https://r.jina.ai/{url}`; 15s timeout; graceful fallback on error
+- [x] `backend/src/activities/extractKeyPoints.ts` — Claude Haiku 4.5 call; input truncated to 8K tokens; returns `{ url, keyPoints, relevance, conflictsFound }`
+- [x] `backend/src/activities/synthesizeReport.ts` — Claude Sonnet 4.6 with `thinking: { type: 'enabled', budget_tokens: 8000 }`; streams `THINKING_CHUNK` and `REPORT_CHUNK` events to `ResearchEvents` table; returns structured markdown
+- [x] `backend/src/activities/persistReport.ts` — writes `report.md` and `sources/{i}.txt` to S3; updates `Sessions` DynamoDB item to `complete`
+- [x] `backend/src/orchestrator/researchOrchestrator.ts` — wires all activities into a durable sequence; emits progress events; retry policy (3x, exponential backoff); hard cap: 8 sources, 10-minute timeout; `PARTIAL_COMPLETE` path on activity exhaustion
+- [x] `backend/src/ws/eventBroadcaster.ts` — DynamoDB Streams handler; posts events to connected WebSocket client via `ApiGatewayManagementApi`
+- [x] CDK constructs for: all activity Lambdas (Node.js 22, ARM64), `synthesizeReport` at 3008 MB / 10 min, Durable orchestrator construct, `eventBroadcaster` Lambda with DynamoDB Streams event source
 
 **Verification:**
 ```bash
