@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib'
 import { ResearchAgentStorageStack } from '../lib/stacks/storage-stack'
+import { ResearchAgentComputeStack } from '../lib/stacks/compute-stack'
 
 const app = new cdk.App()
 
@@ -8,8 +9,11 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION ?? 'us-east-1',
 }
 
-new ResearchAgentStorageStack(app, 'ResearchAgentStorageStack', { env })
+const storage = new ResearchAgentStorageStack(app, 'ResearchAgentStorageStack', { env })
 
-// Added phase by phase:
-// Phase 3-5: ResearchAgentComputeStack
-// Phase 7:   ResearchAgentFrontendStack
+new ResearchAgentComputeStack(app, 'ResearchAgentComputeStack', {
+  env,
+  approvalsTable: storage.approvalsTable,
+})
+
+// Phase 7: ResearchAgentFrontendStack

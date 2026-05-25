@@ -47,13 +47,13 @@ cd infra && npx cdk synth ResearchAgentStorageStack
 Cognito User Pool with Google IdP, two Lambda triggers enforcing the approval gate, and IAM-secured admin endpoints.
 
 **Tasks:**
-- [ ] `backend/src/cognito/cognitoPostAuth.ts` — on first sign-in, write `pending` record to `UserApprovals`; publish to SNS topic with user email + pre-signed approval URL
-- [ ] `backend/src/cognito/cognitoPreTokenGen.ts` — query `UserApprovals`; throw if status is not `approved`
-- [ ] `backend/src/admin/listUsers.ts` — query `UserApprovals` by status GSI
-- [ ] `backend/src/admin/updateUserStatus.ts` — set status to `approved` or `rejected`, write `approvedAt`
-- [ ] Cognito User Pool CDK construct: Google OIDC IdP, Hosted UI, SPA app client (PKCE), PostAuthentication + PreTokenGeneration trigger attachments
-- [ ] SNS topic `NewUserRegistrationTopic` with email subscription to `ADMIN_EMAIL`
-- [ ] Admin API Gateway HTTP API (IAM auth): `GET /admin/users`, `PATCH /admin/users/:userId/approve`, `PATCH /admin/users/:userId/reject`
+- [x] `backend/src/cognito/cognitoPostAuth.ts` — on first sign-in, write `pending` record to `UserApprovals`; publish to SNS topic with user email + pre-signed approval URL
+- [x] `backend/src/cognito/cognitoPreTokenGen.ts` — query `UserApprovals`; throw if status is not `approved`
+- [x] `backend/src/admin/listUsers.ts` — query `UserApprovals` by status GSI
+- [x] `backend/src/admin/updateUserStatus.ts` — set status to `approved` or `rejected`, write `approvedAt`
+- [x] Cognito User Pool CDK construct: Google OIDC IdP, Hosted UI, SPA app client (PKCE), PostAuthentication + PreTokenGeneration trigger attachments
+- [x] SNS topic `NewUserRegistrationTopic` with email subscription to `ADMIN_EMAIL`
+- [x] Admin API Gateway HTTP API (IAM auth): `GET /admin/users`, `PATCH /admin/users/:userId/approve`, `PATCH /admin/users/:userId/reject`
 
 **Verification:**
 ```bash
