@@ -171,27 +171,41 @@ Manual checks (run `npm run dev`, open browser):
 
 ## Phase 7 — Frontend Hosting & Domain
 
-CloudFront distribution serving the SPA and private reports, Route 53 wiring under esaheki.com/research.
+Add the research app as a new origin + cache behavior on the **existing** `esaheki.com` CloudFront distribution. The existing site and its root `/*` behavior must remain untouched.
 
 **Tasks:**
-- [ ] `infra/lib/stacks/network-stack.ts` — ACM certificate for `esaheki.com` (us-east-1, required for CloudFront); Route 53 A + AAAA alias records pointing to CloudFront
-- [ ] `infra/lib/stacks/frontend-stack.ts` — CloudFront distribution: S3 origin for app assets (OAC), S3 origin for private reports (OAC), default root object `index.html`, 404 → `index.html` (SPA routing), HTTPS only
-- [ ] CloudFront function or Lambda@Edge to enforce Cognito auth on the `/reports/*` path
+- [ ] Store the existing CloudFront distribution ID in SSM: `/research-agent/existing-cloudfront-distribution-id`
+- [ ] `infra/lib/stacks/frontend-stack.ts`:
+  - Import the existing distribution with `Distribution.fromDistributionAttributes()`
+  - Create a new private S3 bucket for frontend assets with OAC
+  - Add a CloudFront Function (`spaRewrite`) that rewrites requests with no file extension under `/research/*` to `/research/index.html`
+  - Use the `CfnDistribution` escape hatch to add the new S3 origin and a `/research/*` cache behavior with the `spaRewrite` function — without modifying any existing origins or behaviors
+- [ ] CI/CD invalidation path updated to `/research/*` (not `/*`, which would bust the existing site's cache)
 
 **Verification:**
 ```bash
-cd infra && npx cdk deploy ResearchAgentNetworkStack ResearchAgentFrontendStack
-# Outputs: CloudFrontDomainName, DistributionId
+# Store the existing distribution ID first (one-time manual step):
+aws ssm put-parameter --name /research-agent/existing-cloudfront-distribution-id \
+  --type String --value <your-existing-distribution-id>
+
+cd infra && npx cdk deploy ResearchAgentFrontendStack
 ```
 ```bash
+# Existing site is unaffected:
+curl -I https://esaheki.com
+# → HTTP/2 200
+
+# Research app is reachable:
 curl -I https://esaheki.com/research
-# → HTTP/2 200, x-cache: Miss from cloudfront (or Hit)
+# → HTTP/2 200
 
-curl -I https://esaheki.com/research/nonexistent-route
-# → HTTP/2 200 (SPA fallback to index.html — React Router handles the 404)
+# SPA routing works (deep link returns index.html, not 403/404):
+curl -I https://esaheki.com/research/session/some-id
+# → HTTP/2 200
 
+# Private report assets are blocked without auth:
 curl -I https://esaheki.com/research/reports/some-uuid/report.md
-# → HTTP/2 403 (unauthenticated access to private report is blocked)
+# → HTTP/2 403
 ```
 
 ---

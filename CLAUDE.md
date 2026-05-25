@@ -84,16 +84,18 @@ Event types: `DECOMPOSING`, `SEARCHING`, `RANKING_SOURCES`, `FETCHING_PAGE`, `EX
 - Admin approval routes (`GET|PATCH /admin/users/...`) are IAM-secured on a separate API Gateway stage — invoked via CLI or the pre-signed URL in the notification email.
 
 ### CDK stacks (infra/lib/stacks/)
-1. `ResearchAgentNetworkStack` — Route 53 + ACM cert for esaheki.com/research
-2. `ResearchAgentStorageStack` — DynamoDB tables, private S3 bucket, SSM SecureString params
-3. `ResearchAgentComputeStack` — all Lambdas, Durable orchestrator construct, API Gateway (HTTP + WebSocket), Cognito User Pool + triggers
-4. `ResearchAgentFrontendStack` — CloudFront distribution with OAC for private S3
+1. `ResearchAgentStorageStack` — DynamoDB tables, private S3 bucket (app assets + reports), SSM SecureString params
+2. `ResearchAgentComputeStack` — all Lambdas, Durable orchestrator construct, API Gateway (HTTP + WebSocket), Cognito User Pool + triggers
+3. `ResearchAgentFrontendStack` — adds a `/research/*` origin + behavior to the **existing** `esaheki.com` CloudFront distribution (imported by ID from SSM); does NOT create a new distribution
 
 ### Secrets
 All in SSM Parameter Store under `/research-agent/`:
-`tavily-api-key`, `anthropic-api-key`, `google-client-id`, `google-client-secret`, `admin-email`
+`tavily-api-key`, `anthropic-api-key`, `google-client-id`, `google-client-secret`, `admin-email`, `existing-cloudfront-distribution-id`
 
 ## Key Constraints
+
+- **Do not replace or recreate the existing CloudFront distribution** — `esaheki.com` already has a live site. `ResearchAgentFrontendStack` only adds a `/research/*` cache behavior (new S3 origin with OAC + CloudFront Function for SPA routing) to the existing distribution via the L1 `CfnDistribution` escape hatch. The root `/*` behavior is never modified.
+- **SPA routing** — a CloudFront Function on the `/research/*` behavior rewrites requests with no file extension to `/research/index.html` so React Router handles them.
 
 - **`synthesizeReport` Lambda**: 3008 MB, 10-min timeout (extended thinking is slow). All others: 512 MB, 30s.
 - **All Lambdas**: Node.js 22, ARM64 (Graviton).

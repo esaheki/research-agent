@@ -309,10 +309,11 @@ Admin routes are on a separate API Gateway HTTP API stage secured by **IAM auth*
 ## Infrastructure (AWS CDK TypeScript)
 
 ### Stacks
-1. `ResearchAgentNetworkStack` — Route 53 A record for `esaheki.com/research`, ACM certificate
-2. `ResearchAgentStorageStack` — DynamoDB tables, private versioned S3 bucket, SSM SecureString parameters
-3. `ResearchAgentComputeStack` — All Lambda functions, Durable orchestrator construct, API Gateway (HTTP + WebSocket), Cognito User Pool
-4. `ResearchAgentFrontendStack` — CloudFront distribution (S3 origin for app + reports, OAC)
+1. `ResearchAgentStorageStack` — DynamoDB tables, private versioned S3 bucket (app assets + reports), SSM SecureString parameters
+2. `ResearchAgentComputeStack` — All Lambda functions, Durable orchestrator construct, API Gateway (HTTP + WebSocket), Cognito User Pool
+3. `ResearchAgentFrontendStack` — adds a `/research/*` origin + cache behavior to the **existing** `esaheki.com` CloudFront distribution; no new distribution is created
+
+> **Note on existing infrastructure**: `esaheki.com` is already served by an S3 + CloudFront setup. The research agent must not touch the existing origin or root behavior. The existing distribution ID is stored in SSM (`/research-agent/existing-cloudfront-distribution-id`) and imported in CDK via `Distribution.fromDistributionAttributes()`. New behaviors are added using the L1 `CfnDistribution` escape hatch.
 
 ### Secrets (SSM Parameter Store)
 - `/research-agent/tavily-api-key` (SecureString)
@@ -320,6 +321,7 @@ Admin routes are on a separate API Gateway HTTP API stage secured by **IAM auth*
 - `/research-agent/google-client-id`
 - `/research-agent/google-client-secret` (SecureString)
 - `/research-agent/admin-email` — receives new-user notification emails and pre-signed approval links
+- `/research-agent/existing-cloudfront-distribution-id` — ID of the existing `esaheki.com` distribution; used by `ResearchAgentFrontendStack` to import and extend it
 
 ### Lambda Runtime Configs
 All functions: Node.js 22, ARM64 (Graviton)
@@ -353,7 +355,7 @@ Triggered on push to `main`:
 2. `npx cdk deploy --all` — OIDC-assumed IAM role (no long-lived AWS credentials stored in GitHub)
 3. `npm run build` in `/frontend`
 4. `aws s3 sync dist/ s3://{frontendBucket}/ --delete`
-5. `aws cloudfront create-invalidation --paths "/*"`
+5. `aws cloudfront create-invalidation --distribution-id {existingDistributionId} --paths "/research/*"`
 
 ---
 
