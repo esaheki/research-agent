@@ -44,14 +44,20 @@ jobs:
       # ── Frontend build ─────────────────────────────────────────────────────
 
       - name: Build frontend
-        run: npm run build
+        run: |
+          OUTPUTS=infra/cdk-outputs.json
+          HTTP_API=$(jq -r '.ResearchAgentComputeStack.HttpApiUrl' "$OUTPUTS")
+          WS_API=$(jq -r '.ResearchAgentComputeStack.WebSocketApiUrl' "$OUTPUTS")
+          COGNITO_DOMAIN=$(jq -r '.ResearchAgentComputeStack.CognitoDomain' "$OUTPUTS")
+          CLIENT_ID=$(jq -r '.ResearchAgentComputeStack.UserPoolClientId' "$OUTPUTS")
+
+          VITE_HTTP_API_URL="$HTTP_API" \
+          VITE_WS_API_URL="$WS_API" \
+          VITE_COGNITO_DOMAIN="$COGNITO_DOMAIN" \
+          VITE_COGNITO_CLIENT_ID="$CLIENT_ID" \
+          VITE_COGNITO_REDIRECT_URI="https://esaheki.com/research/callback" \
+          npm run build
         working-directory: frontend
-        env:
-          VITE_HTTP_API_URL: ${{ vars.VITE_HTTP_API_URL }}
-          VITE_WS_API_URL: ${{ vars.VITE_WS_API_URL }}
-          VITE_COGNITO_DOMAIN: ${{ vars.VITE_COGNITO_DOMAIN }}
-          VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
-          VITE_COGNITO_REDIRECT_URI: https://esaheki.com/research/callback
 
       # ── Deploy frontend ────────────────────────────────────────────────────
 
