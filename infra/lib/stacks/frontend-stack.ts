@@ -57,8 +57,9 @@ export class ResearchAgentFrontendStack extends cdk.Stack {
       }),
     )
 
-    // CloudFront Function: rewrite extensionless /research/* paths to /research/index.html
-    // so React Router can handle deep links without a 403/404 from S3.
+    // CloudFront Function: serve index.html for any /research path without a file extension.
+    // This covers /research (exact), /research/ (slash), and deep links like /research/session/x.
+    // Assets (/research/assets/*.js) have an extension and pass through unchanged.
     const spaRewriteFn = new cloudfront.Function(this, 'SpaRewriteFn', {
       functionName: 'ResearchAgentSpaRewrite',
       runtime: cloudfront.FunctionRuntime.JS_2_0,
@@ -66,7 +67,7 @@ export class ResearchAgentFrontendStack extends cdk.Stack {
         [
           'function handler(event) {',
           '  var uri = event.request.uri;',
-          "  if (uri.startsWith('/research/') && !uri.match(/\\.[a-zA-Z0-9]+$/)) {",
+          "  if (!uri.match(/\\.[a-zA-Z0-9]+$/)) {",
           "    event.request.uri = '/research/index.html';",
           '  }',
           '  return event.request;',

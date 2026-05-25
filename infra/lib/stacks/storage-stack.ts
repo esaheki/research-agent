@@ -1,9 +1,7 @@
 import * as cdk from 'aws-cdk-lib'
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb'
 import * as s3 from 'aws-cdk-lib/aws-s3'
-import * as ssm from 'aws-cdk-lib/aws-ssm'
 import { Construct } from 'constructs'
-import { SSM } from '../config'
 
 export class ResearchAgentStorageStack extends cdk.Stack {
   public readonly sessionsTable: dynamodb.Table
@@ -81,24 +79,8 @@ export class ResearchAgentStorageStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     })
 
-    // ── SSM Parameter placeholders (non-sensitive String params) ─────────────
-    // SecureString params (TAVILY_API_KEY, ANTHROPIC_API_KEY, GOOGLE_CLIENT_SECRET)
-    // must be created manually via AWS CLI before deploying ComputeStack — see README.
-    new ssm.StringParameter(this, 'SsmGoogleClientId', {
-      parameterName: SSM.GOOGLE_CLIENT_ID,
-      stringValue: 'REPLACE_ME',
-      description: 'Google OAuth client ID for Cognito federated IdP',
-    })
-    new ssm.StringParameter(this, 'SsmAdminEmail', {
-      parameterName: SSM.ADMIN_EMAIL,
-      stringValue: 'REPLACE_ME',
-      description: 'Admin email — receives new-user approval notifications',
-    })
-    new ssm.StringParameter(this, 'SsmExistingCfDistributionId', {
-      parameterName: SSM.EXISTING_CF_DISTRIBUTION_ID,
-      stringValue: 'REPLACE_ME',
-      description: 'ID of the existing esaheki.com CloudFront distribution',
-    })
+    // SSM parameters are created manually before deploying — CDK reads them at deploy
+    // time via ssm.StringParameter.valueForStringParameter() in the compute/frontend stacks.
 
     // ── Stack Outputs ─────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'SessionsTableName', {

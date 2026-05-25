@@ -125,20 +125,16 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     })
 
-    const googleProvider = new cognito.UserPoolIdentityProviderOidc(this, 'GoogleProvider', {
+    const googleProvider = new cognito.UserPoolIdentityProviderGoogle(this, 'GoogleProvider', {
       userPool,
-      name: 'Google',
       clientId: ssm.StringParameter.valueForStringParameter(this, SSM.GOOGLE_CLIENT_ID),
-      clientSecret: ssm.StringParameter.valueForSecureStringParameter(
-        this,
-        SSM.GOOGLE_CLIENT_SECRET,
-        1,
+      clientSecretValue: cdk.SecretValue.unsafePlainText(
+        ssm.StringParameter.valueForStringParameter(this, SSM.GOOGLE_CLIENT_SECRET),
       ),
-      issuerUrl: 'https://accounts.google.com',
       attributeMapping: {
-        email: cognito.ProviderAttribute.other('email'),
-        givenName: cognito.ProviderAttribute.other('given_name'),
-        familyName: cognito.ProviderAttribute.other('family_name'),
+        email: cognito.ProviderAttribute.GOOGLE_EMAIL,
+        givenName: cognito.ProviderAttribute.GOOGLE_GIVEN_NAME,
+        familyName: cognito.ProviderAttribute.GOOGLE_FAMILY_NAME,
       },
       scopes: ['openid', 'email', 'profile'],
     })
@@ -158,7 +154,7 @@ export class ResearchAgentComputeStack extends cdk.Stack {
         ],
         logoutUrls: ['https://esaheki.com/research', 'http://localhost:5173/research'],
       },
-      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.custom('Google')],
+      supportedIdentityProviders: [cognito.UserPoolClientIdentityProvider.GOOGLE],
       refreshTokenValidity: cdk.Duration.days(30),
       preventUserExistenceErrors: true,
     })
@@ -504,73 +500,10 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       allFunctions,
     })
 
-    // ── Phase 9: GitHub Actions OIDC deploy role ──────────────────────────
-    // Import the existing OIDC provider (created manually in the AWS account)
-    const githubOidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
-      this,
-      'GitHubOidcProvider',
-      `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
-    )
-
-    const deployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
-      roleName: 'GitHubActions-ResearchAgent',
-      description: 'Assumed by GitHub Actions via OIDC to deploy this project',
-      assumedBy: new iam.WebIdentityPrincipal(githubOidcProvider.openIdConnectProviderArn, {
-        StringEquals: {
-          'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-        },
-        StringLike: {
-          // Scope to the exact repo + branch — change if the repo is renamed
-          'token.actions.githubusercontent.com:sub':
-            'repo:esaheki/research-agent:ref:refs/heads/main',
-        },
-      }),
-    })
-
-    // CDK deploy operations go through the CDK bootstrap roles
-    deployRole.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'CdkBootstrapRoles',
-        actions: ['sts:AssumeRole'],
-        resources: [`arn:aws:iam::${this.account}:role/cdk-*`],
-      }),
-    )
-
-    // S3 sync for the frontend bucket (name is CDK-generated so we use a prefix pattern)
-    deployRole.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'FrontendS3Sync',
-        actions: [
-          's3:GetObject',
-          's3:PutObject',
-          's3:DeleteObject',
-          's3:ListBucket',
-          's3:GetBucketLocation',
-        ],
-        resources: [
-          `arn:aws:s3:::researchagentfrontendstack-frontendbucket*`,
-          `arn:aws:s3:::researchagentfrontendstack-frontendbucket*/*`,
-        ],
-      }),
-    )
-
-    // CloudFront invalidation (scoped to the specific distribution at deploy time via SSM)
-    deployRole.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'CloudFrontInvalidation',
-        actions: ['cloudfront:CreateInvalidation'],
-        resources: [`arn:aws:cloudfront::${this.account}:distribution/*`],
-      }),
-    )
-
-    // Read SSM + describe stacks to resolve post-deploy values
-    deployRole.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'CicdReadonly',
-        actions: ['ssm:GetParameter', 'cloudformation:DescribeStacks'],
-        resources: ['*'],
-      }),
-    )
+    // ── Phase 9: GitHub Actions deploy role (created manually via CLI) ───────
+    // Role ARN: arn:aws:iam::055921998432:role/GitHubActions-ResearchAgent
+    // Trust policy scoped to: repo:esaheki/research-agent:ref:refs/heads/main
+    // Policies attached: CdkBootstrapRoles, FrontendDeploy (see PLAN.md Phase 9)
 
     // ── Outputs ───────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'UserPoolId', {
@@ -599,11 +532,6 @@ export class ResearchAgentComputeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'WebSocketApiUrl', {
       value: `wss://${wsApi.ref}.execute-api.${this.region}.amazonaws.com/prod`,
       exportName: 'ResearchAgent-WebSocketApiUrl',
-    })
-    new cdk.CfnOutput(this, 'GitHubActionsRoleArn', {
-      value: deployRole.roleArn,
-      exportName: 'ResearchAgent-GitHubActionsRoleArn',
-      description: 'Set this value as the AWS_ROLE_ARN secret in the GitHub repository',
     })
   }
 }

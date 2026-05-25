@@ -63,7 +63,7 @@ jobs:
             --output text)
 
           # Hashed assets: long-lived cache
-          aws s3 sync frontend/dist/ s3://$BUCKET/ \
+          aws s3 sync frontend/dist/ s3://$BUCKET/research/ \
             --delete \
             --cache-control "max-age=31536000,immutable" \
             --exclude "*.html" \
@@ -71,7 +71,7 @@ jobs:
             --exclude "*.json"
 
           # HTML + manifests: no-cache so browsers always re-check
-          aws s3 sync frontend/dist/ s3://$BUCKET/ \
+          aws s3 sync frontend/dist/ s3://$BUCKET/research/ \
             --cache-control "no-cache" \
             --include "*.html" \
             --include "*.webmanifest" \

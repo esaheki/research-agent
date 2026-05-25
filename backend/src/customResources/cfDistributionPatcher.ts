@@ -54,29 +54,43 @@ async function upsertOriginAndBehavior(
   const etag = res.ETag
   if (!config || !etag) throw new Error('Failed to retrieve distribution config')
 
-  // Upsert origin
+  // Upsert origin — normalize ALL existing origins so required fields are always present.
+  // UpdateDistribution rejects the payload if any field present in the GET response is missing.
   const origins = config.Origins!
-  origins.Items = (origins.Items ?? []).filter((o) => o.Id !== originId)
+  origins.Items = (origins.Items ?? [])
+    .filter((o) => o.Id !== originId)
+    .map((o) => ({
+      OriginPath: '',
+      ConnectionAttempts: 3,
+      ConnectionTimeout: 10,
+      OriginShield: { Enabled: false },
+      ...o,
+      CustomHeaders: { Quantity: 0, Items: [], ...(o.CustomHeaders ?? {}) },
+    }))
   origins.Items.push({
     Id: originId,
     DomainName: bucketDomainName,
-    // OAC requires empty OAI string
+    OriginPath: '',
     S3OriginConfig: { OriginAccessIdentity: '' },
     OriginAccessControlId: oacId,
+    CustomHeaders: { Quantity: 0, Items: [] },
+    ConnectionAttempts: 3,
+    ConnectionTimeout: 10,
+    OriginShield: { Enabled: false },
   })
   origins.Quantity = origins.Items.length
 
-  // Upsert /research/* cache behavior
+  // Upsert /research and /research/* cache behaviors.
+  // Both patterns are needed: /research/* doesn't match the bare /research path.
   const cacheBehaviors = config.CacheBehaviors ?? { Items: [], Quantity: 0 }
   cacheBehaviors.Items = (cacheBehaviors.Items ?? []).filter(
-    (b) => b.PathPattern !== '/research/*',
+    (b) => b.PathPattern !== '/research/*' && b.PathPattern !== '/research',
   )
 
-  const newBehavior: CacheBehavior = {
+  const behaviorBase: CacheBehavior = {
     PathPattern: '/research/*',
     TargetOriginId: originId,
     ViewerProtocolPolicy: 'redirect-to-https',
-    // Managed-CachingOptimized policy
     CachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
     Compress: true,
     AllowedMethods: {
@@ -95,7 +109,9 @@ async function upsertOriginAndBehavior(
     SmoothStreaming: false,
   }
 
-  cacheBehaviors.Items.push(newBehavior)
+  // Exact /research path (no trailing slash) needs its own behavior — /research/* won't match it
+  cacheBehaviors.Items.push({ ...behaviorBase, PathPattern: '/research' })
+  cacheBehaviors.Items.push({ ...behaviorBase, PathPattern: '/research/*' })
   cacheBehaviors.Quantity = cacheBehaviors.Items.length
   config.CacheBehaviors = cacheBehaviors
 
@@ -120,7 +136,7 @@ async function removeOriginAndBehavior(distributionId: string, originId: string)
 
   if (config.CacheBehaviors) {
     config.CacheBehaviors.Items = (config.CacheBehaviors.Items ?? []).filter(
-      (b) => b.TargetOriginId !== originId,
+      (b) => b.PathPattern !== '/research' && b.PathPattern !== '/research/*',
     )
     config.CacheBehaviors.Quantity = config.CacheBehaviors.Items.length
   }
