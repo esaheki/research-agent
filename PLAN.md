@@ -174,13 +174,13 @@ Manual checks (run `npm run dev`, open browser):
 Add the research app as a new origin + cache behavior on the **existing** `esaheki.com` CloudFront distribution. The existing site and its root `/*` behavior must remain untouched.
 
 **Tasks:**
-- [ ] Store the existing CloudFront distribution ID in SSM: `/research-agent/existing-cloudfront-distribution-id`
-- [ ] `infra/lib/stacks/frontend-stack.ts`:
+- [x] Store the existing CloudFront distribution ID in SSM: `/research-agent/existing-cloudfront-distribution-id`
+- [x] `infra/lib/stacks/frontend-stack.ts`:
   - Import the existing distribution with `Distribution.fromDistributionAttributes()`
   - Create a new private S3 bucket for frontend assets with OAC
   - Add a CloudFront Function (`spaRewrite`) that rewrites requests with no file extension under `/research/*` to `/research/index.html`
-  - Use the `CfnDistribution` escape hatch to add the new S3 origin and a `/research/*` cache behavior with the `spaRewrite` function — without modifying any existing origins or behaviors
-- [ ] CI/CD invalidation path updated to `/research/*` (not `/*`, which would bust the existing site's cache)
+  - Use a Lambda-backed custom resource (`CloudFrontDistributionPatcher`) to add the new S3 origin and a `/research/*` cache behavior with the `spaRewrite` function — without modifying any existing origins or behaviors
+- [x] CI/CD invalidation path updated to `/research/*` (not `/*`, which would bust the existing site's cache)
 
 **Verification:**
 ```bash

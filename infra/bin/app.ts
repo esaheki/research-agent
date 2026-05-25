@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib'
 import { ResearchAgentStorageStack } from '../lib/stacks/storage-stack'
 import { ResearchAgentComputeStack } from '../lib/stacks/compute-stack'
+import { ResearchAgentFrontendStack } from '../lib/stacks/frontend-stack'
 
 const app = new cdk.App()
 
@@ -20,4 +21,4 @@ new ResearchAgentComputeStack(app, 'ResearchAgentComputeStack', {
   assetsBucket: storage.assetsBucket,
 })
 
-// Phase 7: ResearchAgentFrontendStack
+new ResearchAgentFrontendStack(app, 'ResearchAgentFrontendStack', { env })
