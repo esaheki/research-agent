@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ReportViewer } from '../components/ReportViewer/ReportViewer'
+import { useIsMobile } from '../hooks/useMobile'
 import { api } from '../lib/api'
 import type { SessionDetail } from '../lib/types'
 
@@ -9,7 +10,7 @@ interface ChatMessage {
   content: string
 }
 
-function ChatPanel({ sessionId }: { sessionId: string }) {
+function ChatPanel({ sessionId, isMobile }: { sessionId: string; isMobile: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -45,7 +46,7 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
         borderTop: '1px solid var(--color-border)',
         display: 'flex',
         flexDirection: 'column',
-        height: '320px',
+        height: isMobile ? '45vh' : '320px',
       }}
     >
       <h2 style={{ margin: '12px 16px', fontSize: '14px', fontWeight: 600 }}>Ask about this report</h2>
@@ -110,6 +111,7 @@ function ChatPanel({ sessionId }: { sessionId: string }) {
 
 export function SessionPage() {
   const { id } = useParams<{ id: string }>()
+  const isMobile = useIsMobile()
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [reportMarkdown, setReportMarkdown] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -161,7 +163,7 @@ export function SessionPage() {
       {/* Header */}
       <header
         style={{
-          padding: '12px 20px',
+          padding: isMobile ? '10px 16px' : '12px 20px',
           borderBottom: '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
@@ -169,13 +171,16 @@ export function SessionPage() {
           flexShrink: 0,
         }}
       >
-        <Link to="/research/history" style={{ color: 'var(--color-primary)', fontSize: '14px' }}>
+        <Link
+          to="/research/history"
+          style={{ color: 'var(--color-primary)', fontSize: '13px', flexShrink: 0 }}
+        >
           ← History
         </Link>
         <h1
           style={{
             margin: 0,
-            fontSize: '16px',
+            fontSize: isMobile ? '13px' : '16px',
             fontWeight: 600,
             flex: 1,
             whiteSpace: 'nowrap',
@@ -195,7 +200,7 @@ export function SessionPage() {
             isPartial={session?.status === 'partial-complete'}
           />
         </div>
-        {id && <ChatPanel sessionId={id} />}
+        {id && <ChatPanel sessionId={id} isMobile={isMobile} />}
       </div>
     </div>
   )

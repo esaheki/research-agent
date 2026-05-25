@@ -1,3 +1,4 @@
+import { useIsMobile } from '../hooks/useMobile'
 import { redirectToLogin } from '../lib/cognito'
 
 const FEATURES = [
@@ -24,6 +25,7 @@ const FEATURES = [
 ]
 
 export function HomePage() {
+  const isMobile = useIsMobile()
   return (
     <div
       style={{
@@ -39,7 +41,7 @@ export function HomePage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '16px 32px',
+          padding: isMobile ? '14px 20px' : '16px 32px',
           borderBottom: '1px solid var(--color-border)',
           background: 'var(--color-surface)',
         }}
@@ -62,13 +64,13 @@ export function HomePage() {
           style={{
             width: '100%',
             maxWidth: '680px',
-            padding: '80px 24px 64px',
+            padding: isMobile ? '48px 20px 40px' : '80px 24px 64px',
             textAlign: 'center',
           }}
         >
           <h1
             style={{
-              fontSize: '2.4rem',
+              fontSize: isMobile ? '1.75rem' : '2.4rem',
               fontWeight: 800,
               letterSpacing: '-0.03em',
               lineHeight: 1.15,
@@ -108,10 +110,10 @@ export function HomePage() {
           style={{
             width: '100%',
             maxWidth: '800px',
-            padding: '0 24px 80px',
+            padding: isMobile ? '0 16px 48px' : '0 24px 80px',
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '16px',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '12px',
           }}
         >
           {FEATURES.map((f) => (

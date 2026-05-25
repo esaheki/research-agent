@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { EventStream } from '../components/EventStream/EventStream'
 import { ReportViewer } from '../components/ReportViewer/ReportViewer'
 import { SplitPane } from '../components/SplitPane/SplitPane'
+import { useIsMobile } from '../hooks/useMobile'
 import { useResearch } from '../hooks/useResearch'
 
 interface CancelModalProps {
@@ -58,6 +59,7 @@ interface ResearchPageProps {
 
 export function ResearchPage({ onLogout }: ResearchPageProps) {
   const { submit, sessionId, events, report, isRunning, isPartial, error, cancel } = useResearch()
+  const isMobile = useIsMobile()
   const [question, setQuestion] = useState('')
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
@@ -105,7 +107,7 @@ export function ResearchPage({ onLogout }: ResearchPageProps) {
       {/* Header */}
       <header
         style={{
-          padding: '12px 20px',
+          padding: isMobile ? '10px 16px' : '12px 20px',
           borderBottom: '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
@@ -113,11 +115,11 @@ export function ResearchPage({ onLogout }: ResearchPageProps) {
           flexShrink: 0,
         }}
       >
-        <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 700, flex: 1 }}>
+        <h1 style={{ margin: 0, fontSize: isMobile ? '15px' : '18px', fontWeight: 700, flex: 1 }}>
           Research Agent
         </h1>
-        <nav style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <Link to="/research/history" style={{ color: 'var(--color-primary)', fontSize: '14px' }}>
+        <nav style={{ display: 'flex', gap: isMobile ? '8px' : '12px', alignItems: 'center' }}>
+          <Link to="/research/history" style={{ color: 'var(--color-primary)', fontSize: '13px' }}>
             History
           </Link>
           <button className="btn btn-secondary btn-sm" onClick={onLogout}>
@@ -129,12 +131,19 @@ export function ResearchPage({ onLogout }: ResearchPageProps) {
       {/* Question input */}
       <div
         style={{
-          padding: '16px 20px',
+          padding: isMobile ? '12px 16px' : '16px 20px',
           borderBottom: '1px solid var(--color-border)',
           flexShrink: 0,
         }}
       >
-        <form onSubmit={(e) => void handleSubmit(e)} style={{ display: 'flex', gap: '10px' }}>
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: '8px',
+          }}
+        >
           <input
             type="text"
             value={question}
@@ -148,6 +157,7 @@ export function ResearchPage({ onLogout }: ResearchPageProps) {
             type="submit"
             className="btn btn-primary"
             disabled={isSubmitting || !question.trim()}
+            style={isMobile ? { width: '100%' } : undefined}
           >
             {isRunning ? 'New Research' : 'Research'}
           </button>

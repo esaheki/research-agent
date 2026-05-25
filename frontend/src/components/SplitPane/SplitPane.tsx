@@ -1,16 +1,27 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useIsMobile } from '../../hooks/useMobile'
 
 interface SplitPaneProps {
   left: ReactNode
   right: ReactNode
   defaultSplit?: number // 0-1, fraction for left panel
+  leftLabel?: string
+  rightLabel?: string
 }
 
-export function SplitPane({ left, right, defaultSplit = 0.4 }: SplitPaneProps) {
+export function SplitPane({
+  left,
+  right,
+  defaultSplit = 0.4,
+  leftLabel = 'Activity',
+  rightLabel = 'Report',
+}: SplitPaneProps) {
   const [splitFraction, setSplitFraction] = useState(defaultSplit)
+  const [activeTab, setActiveTab] = useState<'left' | 'right'>('left')
   const containerRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
+  const isMobile = useIsMobile()
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -32,6 +43,54 @@ export function SplitPane({ left, right, defaultSplit = 0.4 }: SplitPaneProps) {
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
   }, [])
+
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {/* Tab bar */}
+        <div
+          style={{
+            display: 'flex',
+            borderBottom: '1px solid var(--color-border)',
+            flexShrink: 0,
+          }}
+        >
+          {(['left', 'right'] as const).map((tab) => {
+            const label = tab === 'left' ? leftLabel : rightLabel
+            const isActive = activeTab === tab
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: '13px',
+                  fontWeight: isActive ? 600 : 400,
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: isActive
+                    ? '2px solid var(--color-primary)'
+                    : '2px solid transparent',
+                  color: isActive ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'color 0.15s, border-color 0.15s',
+                  marginBottom: '-1px',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Active pane */}
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+          {activeTab === 'left' ? left : right}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
