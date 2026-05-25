@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+cdk.out/
+.cdk.staging/
+frontend/dist/
+
+# Environment — store secrets in SSM, not here
+.env
+.env.*
+!.env.example
+
+# Editor
+.DS_Store
+.vscode/settings.json
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+
+# TypeScript incremental build info
+*.tsbuildinfo

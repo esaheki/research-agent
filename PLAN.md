@@ -9,11 +9,11 @@ Phases are sequential. Each phase has a **verification** step that must pass bef
 Set up the three-package TypeScript monorepo with shared tooling.
 
 **Tasks:**
-- [ ] Create `infra/`, `backend/`, `frontend/` directories with `package.json` in each
-- [ ] Configure `tsconfig.json` in each package (strict mode, `ES2022` target)
-- [ ] Add root-level `package.json` with `workspaces` and scripts that forward to each package
-- [ ] Add `.gitignore` (node_modules, dist, cdk.out, .env*)
-- [ ] Add `backend/` ESLint + Prettier config shared across infra and backend
+- [x] Create `infra/`, `backend/`, `frontend/` directories with `package.json` in each
+- [x] Configure `tsconfig.json` in each package (strict mode, `ES2022` target)
+- [x] Add root-level `package.json` with `workspaces` and scripts that forward to each package
+- [x] Add `.gitignore` (node_modules, dist, cdk.out, .env*)
+- [x] Add `backend/` ESLint + Prettier config shared across infra and backend
 
 **Verification:**
 ```bash

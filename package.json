@@ -1,0 +1,23 @@
+{
+  "name": "research-agent",
+  "private": true,
+  "workspaces": [
+    "infra",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm -w infra run build && npm -w backend run build",
+    "test": "npm -w backend run test",
+    "lint": "eslint infra/bin infra/lib backend/src",
+    "format": "prettier --write \"infra/**/*.ts\" \"backend/**/*.ts\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.7.0"
+  }
+}
