@@ -57,7 +57,8 @@ export const api = {
       const text = await res.text()
       throw new Error(`Failed to get session: ${res.status} ${text}`)
     }
-    return res.json() as Promise<SessionDetail>
+    const body = (await res.json()) as { session: SessionDetail }
+    return body.session
   },
 
   async chat(sessionId: string, message: string): Promise<{ message: string }> {
