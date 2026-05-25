@@ -74,9 +74,11 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       entry: path.join(REPO_ROOT, 'backend/src/cognito/cognitoPreTokenGen.ts'),
       environment: {
         USER_APPROVALS_TABLE: approvalsTable.tableName,
+        NEW_USER_TOPIC_ARN: newUserTopic.topicArn,
       },
     })
-    approvalsTable.grantReadData(preTokenGenFn)
+    approvalsTable.grantReadWriteData(preTokenGenFn)
+    newUserTopic.grantPublish(preTokenGenFn)
 
     // ── Admin Lambdas ─────────────────────────────────────────────────────
     const listUsersFn = new nodejs.NodejsFunction(this, 'AdminListUsers', {
