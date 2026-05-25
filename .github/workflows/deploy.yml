@@ -1,0 +1,88 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Required for OIDC token exchange with AWS
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # ── Install ────────────────────────────────────────────────────────────
+
+      - name: Install dependencies (root + all workspaces)
+        run: npm ci
+
+      # ── Infrastructure ─────────────────────────────────────────────────────
+
+      - name: CDK deploy (all stacks)
+        run: npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json
+        working-directory: infra
+
+      # ── Frontend build ─────────────────────────────────────────────────────
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend
+        env:
+          VITE_HTTP_API_URL: ${{ vars.VITE_HTTP_API_URL }}
+          VITE_WS_API_URL: ${{ vars.VITE_WS_API_URL }}
+          VITE_COGNITO_DOMAIN: ${{ vars.VITE_COGNITO_DOMAIN }}
+          VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
+          VITE_COGNITO_REDIRECT_URI: https://esaheki.com/research/callback
+
+      # ── Deploy frontend ────────────────────────────────────────────────────
+
+      - name: Sync frontend to S3
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name ResearchAgentFrontendStack \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
+            --output text)
+
+          # Hashed assets: long-lived cache
+          aws s3 sync frontend/dist/ s3://$BUCKET/ \
+            --delete \
+            --cache-control "max-age=31536000,immutable" \
+            --exclude "*.html" \
+            --exclude "*.webmanifest" \
+            --exclude "*.json"
+
+          # HTML + manifests: no-cache so browsers always re-check
+          aws s3 sync frontend/dist/ s3://$BUCKET/ \
+            --cache-control "no-cache" \
+            --include "*.html" \
+            --include "*.webmanifest" \
+            --include "*.json"
+
+      - name: Invalidate CloudFront cache (/research/* only)
+        run: |
+          DIST_ID=$(aws ssm get-parameter \
+            --name /research-agent/existing-cloudfront-distribution-id \
+            --query Parameter.Value \
+            --output text)
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/research/*"

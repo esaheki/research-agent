@@ -241,10 +241,10 @@ aws xray get-service-graph --start-time $(date -v-10M +%s) --end-time $(date +%s
 GitHub Actions pipeline that deploys infrastructure and frontend on every push to `main`.
 
 **Tasks:**
-- [ ] `.github/workflows/deploy.yml` — steps: checkout → configure AWS via OIDC → `npm ci` in infra/ → `cdk deploy --all --require-approval never` → `npm ci && npm run build` in frontend/ → `aws s3 sync` → CloudFront invalidation
-- [ ] IAM OIDC provider for GitHub Actions in CDK (or document the manual setup step)
-- [ ] GitHub repository secret: `AWS_ROLE_ARN` (the OIDC-assumed role ARN)
-- [ ] Confirm the IAM role has least-privilege permissions scoped to CDK deploy + S3 sync + CloudFront invalidation
+- [x] `.github/workflows/deploy.yml` — steps: checkout → configure AWS via OIDC → `npm ci` in infra/ → `cdk deploy --all --require-approval never` → `npm ci && npm run build` in frontend/ → `aws s3 sync` → CloudFront invalidation
+- [x] IAM OIDC provider for GitHub Actions in CDK (or document the manual setup step)
+- [x] GitHub repository secret: `AWS_ROLE_ARN` (the OIDC-assumed role ARN)
+- [x] Confirm the IAM role has least-privilege permissions scoped to CDK deploy + S3 sync + CloudFront invalidation
 
 **Verification:**
 - Push a whitespace change to `main`; GitHub Actions workflow completes green
