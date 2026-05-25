@@ -11,7 +11,7 @@ import * as sns from 'aws-cdk-lib/aws-sns'
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'
 import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2'
-import { HttpIamAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers'
+import { HttpIamAuthorizer, HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers'
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations'
 import { Construct } from 'constructs'
 import { SSM } from '../config'
@@ -250,6 +250,87 @@ export class ResearchAgentComputeStack extends cdk.Stack {
     sessionsTable.grantReadWriteData(orchestrator.handler)
     eventsTable.grantWriteData(orchestrator.handler)
 
+    // ── Phase 5: WebSocket API ────────────────────────────────────────────
+    const wsConnectFn = new nodejs.NodejsFunction(this, 'WsConnect', {
+      ...fnDefaults,
+      entry: path.join(REPO_ROOT, 'backend/src/ws/wsConnect.ts'),
+      environment: {
+        CONNECTIONS_TABLE: connectionsTable.tableName,
+        SESSIONS_TABLE: sessionsTable.tableName,
+        EVENTS_TABLE: eventsTable.tableName,
+        COGNITO_USER_POOL_ID: userPool.userPoolId,
+        COGNITO_USER_POOL_CLIENT_ID: appClient.userPoolClientId,
+      },
+    })
+    connectionsTable.grantReadWriteData(wsConnectFn)
+    sessionsTable.grantReadWriteData(wsConnectFn)
+    eventsTable.grantReadData(wsConnectFn)
+
+    const wsDisconnectFn = new nodejs.NodejsFunction(this, 'WsDisconnect', {
+      ...fnDefaults,
+      entry: path.join(REPO_ROOT, 'backend/src/ws/wsDisconnect.ts'),
+      environment: {
+        CONNECTIONS_TABLE: connectionsTable.tableName,
+      },
+    })
+    connectionsTable.grantReadWriteData(wsDisconnectFn)
+
+    const wsApi = new apigwv2.CfnApi(this, 'ResearchAgentWsApi', {
+      name: 'ResearchAgentWsApi',
+      protocolType: 'WEBSOCKET',
+      routeSelectionExpression: '$request.body.action',
+    })
+
+    const wsConnectIntegration = new apigwv2.CfnIntegration(this, 'WsConnectIntegration', {
+      apiId: wsApi.ref,
+      integrationType: 'AWS_PROXY',
+      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${wsConnectFn.functionArn}/invocations`,
+    })
+    const wsDisconnectIntegration = new apigwv2.CfnIntegration(this, 'WsDisconnectIntegration', {
+      apiId: wsApi.ref,
+      integrationType: 'AWS_PROXY',
+      integrationUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${wsDisconnectFn.functionArn}/invocations`,
+    })
+
+    const wsConnectRoute = new apigwv2.CfnRoute(this, 'WsConnectRoute', {
+      apiId: wsApi.ref,
+      routeKey: '$connect',
+      target: `integrations/${wsConnectIntegration.ref}`,
+    })
+    const wsDisconnectRoute = new apigwv2.CfnRoute(this, 'WsDisconnectRoute', {
+      apiId: wsApi.ref,
+      routeKey: '$disconnect',
+      target: `integrations/${wsDisconnectIntegration.ref}`,
+    })
+
+    const wsStage = new apigwv2.CfnStage(this, 'WsStage', {
+      apiId: wsApi.ref,
+      stageName: 'prod',
+      autoDeploy: true,
+    })
+    wsStage.addDependency(wsConnectRoute)
+    wsStage.addDependency(wsDisconnectRoute)
+
+    // Allow API Gateway to invoke the WebSocket Lambda handlers
+    wsConnectFn.addPermission('WsConnectPermission', {
+      principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${wsApi.ref}/*/$connect`,
+    })
+    wsDisconnectFn.addPermission('WsDisconnectPermission', {
+      principal: new iam.ServicePrincipal('apigateway.amazonaws.com'),
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${wsApi.ref}/*/$disconnect`,
+    })
+
+    const wsApiEndpoint = `https://${wsApi.ref}.execute-api.${this.region}.amazonaws.com/prod`
+
+    // Allow wsConnect to post events back over WebSocket during replay
+    wsConnectFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['execute-api:ManageConnections'],
+        resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApi.ref}/*`],
+      }),
+    )
+
     // ── Phase 4: eventBroadcaster (DynamoDB Streams → WebSocket) ─────────
     const eventBroadcasterFn = new nodejs.NodejsFunction(this, 'EventBroadcaster', {
       ...fnDefaults,
@@ -257,18 +338,16 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       environment: {
         CONNECTIONS_TABLE: connectionsTable.tableName,
         SESSIONS_TABLE: sessionsTable.tableName,
-        // WEBSOCKET_API_ENDPOINT set in Phase 5 once the WebSocket API is created
-        WEBSOCKET_API_ENDPOINT: '',
+        WEBSOCKET_API_ENDPOINT: wsApiEndpoint,
       },
     })
     connectionsTable.grantReadWriteData(eventBroadcasterFn)
     sessionsTable.grantReadData(eventBroadcasterFn)
 
-    // Grant execute-api for posting to WebSocket connections (Phase 5 will scope this)
     eventBroadcasterFn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ['execute-api:ManageConnections'],
-        resources: [`arn:aws:execute-api:${this.region}:${this.account}:*`],
+        resources: [`arn:aws:execute-api:${this.region}:${this.account}:${wsApi.ref}/*`],
       }),
     )
 
@@ -279,6 +358,109 @@ export class ResearchAgentComputeStack extends cdk.Stack {
         bisectBatchOnError: true,
       }),
     )
+
+    // ── Phase 5: HTTP API with Cognito JWT authorizer ─────────────────────
+    const jwtAuthorizer = new HttpJwtAuthorizer('CognitoJwtAuthorizer', userPool.userPoolProviderUrl, {
+      jwtAudience: [appClient.userPoolClientId],
+    })
+
+    const startResearchFn = new nodejs.NodejsFunction(this, 'StartResearch', {
+      ...fnDefaults,
+      entry: path.join(REPO_ROOT, 'backend/src/api/startResearch.ts'),
+      environment: {
+        SESSIONS_TABLE: sessionsTable.tableName,
+        ORCHESTRATOR_FUNCTION_NAME: orchestrator.handler.functionName,
+      },
+    })
+    sessionsTable.grantReadWriteData(startResearchFn)
+    orchestrator.handler.grantInvoke(startResearchFn)
+
+    const cancelResearchFn = new nodejs.NodejsFunction(this, 'CancelResearch', {
+      ...fnDefaults,
+      entry: path.join(REPO_ROOT, 'backend/src/api/cancelResearch.ts'),
+      environment: {
+        SESSIONS_TABLE: sessionsTable.tableName,
+      },
+    })
+    sessionsTable.grantReadWriteData(cancelResearchFn)
+
+    const listSessionsFn = new nodejs.NodejsFunction(this, 'ListSessions', {
+      ...fnDefaults,
+      entry: path.join(REPO_ROOT, 'backend/src/api/listSessions.ts'),
+      environment: {
+        SESSIONS_TABLE: sessionsTable.tableName,
+      },
+    })
+    sessionsTable.grantReadData(listSessionsFn)
+
+    const getSessionFn = new nodejs.NodejsFunction(this, 'GetSession', {
+      ...fnDefaults,
+      entry: path.join(REPO_ROOT, 'backend/src/api/getSession.ts'),
+      environment: {
+        SESSIONS_TABLE: sessionsTable.tableName,
+        ASSETS_BUCKET: assetsBucket.bucketName,
+      },
+    })
+    sessionsTable.grantReadData(getSessionFn)
+    assetsBucket.grantRead(getSessionFn, 'reports/*')
+
+    const chatWithReportFn = new nodejs.NodejsFunction(this, 'ChatWithReport', {
+      ...fnDefaults,
+      entry: path.join(REPO_ROOT, 'backend/src/api/chatWithReport.ts'),
+      environment: {
+        SESSIONS_TABLE: sessionsTable.tableName,
+        ASSETS_BUCKET: assetsBucket.bucketName,
+        ANTHROPIC_API_KEY_SSM_PATH: SSM.ANTHROPIC_API_KEY,
+      },
+    })
+    sessionsTable.grantReadData(chatWithReportFn)
+    assetsBucket.grantRead(chatWithReportFn, 'reports/*')
+    chatWithReportFn.addToRolePolicy(anthropicGrant)
+
+    const researchApi = new apigwv2.HttpApi(this, 'ResearchAgentHttpApi', {
+      apiName: 'ResearchAgentHttpApi',
+      corsPreflight: {
+        allowOrigins: ['https://esaheki.com', 'http://localhost:5173'],
+        allowMethods: [
+          apigwv2.CorsHttpMethod.GET,
+          apigwv2.CorsHttpMethod.POST,
+          apigwv2.CorsHttpMethod.DELETE,
+          apigwv2.CorsHttpMethod.OPTIONS,
+        ],
+        allowHeaders: ['Authorization', 'Content-Type'],
+      },
+    })
+
+    researchApi.addRoutes({
+      path: '/research',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: new HttpLambdaIntegration('StartResearchIntegration', startResearchFn),
+      authorizer: jwtAuthorizer,
+    })
+    researchApi.addRoutes({
+      path: '/research/{sessionId}',
+      methods: [apigwv2.HttpMethod.DELETE],
+      integration: new HttpLambdaIntegration('CancelResearchIntegration', cancelResearchFn),
+      authorizer: jwtAuthorizer,
+    })
+    researchApi.addRoutes({
+      path: '/research/history',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration('ListSessionsIntegration', listSessionsFn),
+      authorizer: jwtAuthorizer,
+    })
+    researchApi.addRoutes({
+      path: '/research/{sessionId}',
+      methods: [apigwv2.HttpMethod.GET],
+      integration: new HttpLambdaIntegration('GetSessionIntegration', getSessionFn),
+      authorizer: jwtAuthorizer,
+    })
+    researchApi.addRoutes({
+      path: '/research/{sessionId}/chat',
+      methods: [apigwv2.HttpMethod.POST],
+      integration: new HttpLambdaIntegration('ChatWithReportIntegration', chatWithReportFn),
+      authorizer: jwtAuthorizer,
+    })
 
     // ── Outputs ───────────────────────────────────────────────────────────
     new cdk.CfnOutput(this, 'UserPoolId', {
@@ -299,6 +481,14 @@ export class ResearchAgentComputeStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'OrchestratorFunctionName', {
       value: orchestrator.handler.functionName,
       exportName: 'ResearchAgent-OrchestratorFunctionName',
+    })
+    new cdk.CfnOutput(this, 'HttpApiUrl', {
+      value: researchApi.apiEndpoint,
+      exportName: 'ResearchAgent-HttpApiUrl',
+    })
+    new cdk.CfnOutput(this, 'WebSocketApiUrl', {
+      value: `wss://${wsApi.ref}.execute-api.${this.region}.amazonaws.com/prod`,
+      exportName: 'ResearchAgent-WebSocketApiUrl',
     })
   }
 }

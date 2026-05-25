@@ -109,14 +109,14 @@ cd infra && npx cdk synth ResearchAgentComputeStack
 HTTP API endpoints for starting, cancelling, and querying research sessions, plus the WebSocket connection handlers and the post-report Q&A endpoint.
 
 **Tasks:**
-- [ ] `backend/src/api/startResearch.ts` — validates request, checks for existing `running` session (returns 409 if found), starts orchestrator, writes `pending` session to DynamoDB, returns `{ sessionId }`
-- [ ] `backend/src/api/cancelResearch.ts` — verifies ownership, sends cancel signal to orchestrator, updates session status to `cancelled`
-- [ ] `backend/src/api/listSessions.ts` — queries `userId-startedAt-index` GSI, returns last 20 sessions
-- [ ] `backend/src/api/getSession.ts` — returns session metadata; if complete, returns report markdown from S3
-- [ ] `backend/src/api/chatWithReport.ts` — loads report + source texts from S3; streams Claude Sonnet 4.6 response via SSE; verifies session ownership
-- [ ] `backend/src/ws/wsConnect.ts` — validates Cognito token, writes `connectionId → sessionId` to `WebSocketConnections`; replays all existing `ResearchEvents` for the session so reconnecting clients catch up
-- [ ] `backend/src/ws/wsDisconnect.ts` — deletes connection record
-- [ ] CDK: HTTP API with Cognito JWT authorizer on all `/research` routes; WebSocket API with custom Lambda authorizer on `$connect`; all route integrations wired
+- [x] `backend/src/api/startResearch.ts` — validates request, checks for existing `running` session (returns 409 if found), starts orchestrator, writes `pending` session to DynamoDB, returns `{ sessionId }`
+- [x] `backend/src/api/cancelResearch.ts` — verifies ownership, sends cancel signal to orchestrator, updates session status to `cancelled`
+- [x] `backend/src/api/listSessions.ts` — queries `userId-startedAt-index` GSI, returns last 20 sessions
+- [x] `backend/src/api/getSession.ts` — returns session metadata; if complete, returns report markdown from S3
+- [x] `backend/src/api/chatWithReport.ts` — loads report + source texts from S3; streams Claude Sonnet 4.6 response via SSE; verifies session ownership
+- [x] `backend/src/ws/wsConnect.ts` — validates Cognito token, writes `connectionId → sessionId` to `WebSocketConnections`; replays all existing `ResearchEvents` for the session so reconnecting clients catch up
+- [x] `backend/src/ws/wsDisconnect.ts` — deletes connection record
+- [x] CDK: HTTP API with Cognito JWT authorizer on all `/research` routes; WebSocket API with custom Lambda authorizer on `$connect`; all route integrations wired
 
 **Verification:**
 ```bash
