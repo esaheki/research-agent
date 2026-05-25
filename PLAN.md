@@ -28,10 +28,10 @@ cd frontend && npm run typecheck  # zero errors
 Define all persistent infrastructure: DynamoDB tables, S3 bucket, SSM parameter placeholders.
 
 **Tasks:**
-- [ ] `infra/lib/stacks/storage-stack.ts` — define all four DynamoDB tables with correct keys, GSIs, TTL attributes, and Streams config on `ResearchEvents`
-- [ ] S3 bucket: private, versioned, CORS policy for CloudFront origin
-- [ ] SSM Parameter Store string placeholders for all five secrets (values set manually — see README)
-- [ ] Export table names, bucket name, and ARNs as CDK stack outputs
+- [x] `infra/lib/stacks/storage-stack.ts` — define all four DynamoDB tables with correct keys, GSIs, TTL attributes, and Streams config on `ResearchEvents`
+- [x] S3 bucket: private, versioned, CORS policy for CloudFront origin
+- [x] SSM Parameter Store string placeholders for all five secrets (values set manually — see README)
+- [x] Export table names, bucket name, and ARNs as CDK stack outputs
 
 **Verification:**
 ```bash
