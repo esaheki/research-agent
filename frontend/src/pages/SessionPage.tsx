@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { ReportViewer } from '../components/ReportViewer/ReportViewer'
 import { useIsMobile } from '../hooks/useMobile'
 import { api } from '../lib/api'
@@ -78,7 +80,13 @@ function ChatPanel({ sessionId, isMobile }: { sessionId: string; isMobile: boole
                 lineHeight: '1.5',
               }}
             >
-              {msg.content}
+              {msg.role === 'assistant' ? (
+                <div className="chat-markdown">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                </div>
+              ) : (
+                msg.content
+              )}
             </div>
           </div>
         ))}

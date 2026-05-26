@@ -216,6 +216,33 @@ a:hover {
   text-decoration: underline;
 }
 
+.chat-markdown p,
+.chat-markdown ul,
+.chat-markdown ol {
+  margin: 0 0 8px 0;
+}
+.chat-markdown p:last-child,
+.chat-markdown ul:last-child,
+.chat-markdown ol:last-child {
+  margin-bottom: 0;
+}
+.chat-markdown li {
+  margin: 2px 0;
+}
+.chat-markdown code {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.9em;
+}
+.chat-markdown pre {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+}
+.chat-markdown strong { font-weight: 600; }
+
 #root {
   height: 100vh;
   display: flex;
