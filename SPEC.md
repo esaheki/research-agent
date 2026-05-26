@@ -109,60 +109,57 @@ DynamoDB Streams on `ResearchEvents` table → `eventBroadcaster` Lambda → `Ap
 
 ## Lambda Durable Orchestrator
 
+Uses the official AWS Lambda Durable Functions SDK (`@aws/durable-execution-sdk-js`, announced re:Invent 2025). The orchestrator Lambda has `durableConfig` enabled with a 10-minute execution timeout, is invoked via a `live` alias (required for durable functions), and carries the `AWSLambdaBasicDurableExecutionRolePolicy` for checkpoint permissions.
+
+The durable runtime checkpoints after every `ctx.invoke()` and `ctx.step()` call. If the orchestrator Lambda is interrupted, the runtime replays from the last checkpoint — no step is re-executed.
+
 ### Orchestrator: `researchOrchestrator`
 
 ```typescript
-// All awaited calls are durable checkpoints — safe to replay
-async function researchOrchestrator(ctx: OrchestratorContext, question: string) {
+export const handler = withDurableExecution(async (event: OrchestratorInput, ctx: DurableContext) => {
   // Step 1: Decompose into 3-5 diverse sub-queries
-  emit(ctx, 'DECOMPOSING', { question })
-  const subQueries = await ctx.callActivity('decomposeQuery', question)
+  // emitEvent (a DynamoDB write) is wrapped in ctx.step() so it is checkpointed
+  // and not re-executed on replay when the orchestrator resumes after each invoke.
+  await ctx.step('emit-decomposing', async () => {
+    await emitEvent(ddb, EVENTS_TABLE, sessionId, 'DECOMPOSING', { question })
+  })
+  const subQueries = await ctx.invoke('decomposeQuery', ACTIVITY.decomposeQuery, { question })
 
   // Steps 2..N: Search each sub-query via Tavily
   const searchResults = []
-  for (const q of subQueries) {
-    emit(ctx, 'SEARCHING', { query: q })
-    const results = await ctx.callActivity('tavilySearch', q)
+  for (let i = 0; i < subQueries.length; i++) {
+    await ctx.step(`emit-searching-${i}`, async () => {
+      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'SEARCHING', { query: subQueries[i], queryIndex: i })
+    })
+    const results = await ctx.invoke(`tavilySearch-${i}`, ACTIVITY.tavilySearch, { query: subQueries[i] })
     searchResults.push(...results)
   }
 
   // Step N+1: LLM-rank and deduplicate, select top 8 URLs
-  emit(ctx, 'RANKING_SOURCES')
-  const rankedUrls = await ctx.callActivity('rankUrls', { question, searchResults })
+  await ctx.step('emit-ranking', () => emitEvent(...'RANKING_SOURCES'...))
+  const rankedUrls = await ctx.invoke('rankUrls', ACTIVITY.rankUrls, { question, searchResults })
 
-  // Steps N+2..N+9: Fetch each page via Jina Reader
-  const pageContents = []
-  for (const url of rankedUrls.slice(0, 8)) {
-    emit(ctx, 'FETCHING_PAGE', { url, domain: new URL(url).hostname })
-    const content = await ctx.callActivity('fetchPage', url)
-    pageContents.push({ url, content })
-  }
-
-  // Steps N+10..N+17: Extract key points per page (Claude Haiku)
-  const extractions = []
-  for (const { url, content } of pageContents) {
-    emit(ctx, 'EXTRACTING', { url })
-    const extraction = await ctx.callActivity('extractKeyPoints', { question, url, content })
-    extractions.push(extraction)
-  }
+  // Steps N+2..N+17: fetch + extract (same pattern — step then invoke per URL)
+  // ...
 
   // Step N+18: Full synthesis with extended thinking (Claude Sonnet 4.6)
-  emit(ctx, 'SYNTHESIZING')
-  const report = await ctx.callActivity('synthesizeReport', { question, extractions })
+  await ctx.step('emit-synthesizing', () => emitEvent(...'SYNTHESIZING'...))
+  const { report } = await ctx.invoke('synthesizeReport', ACTIVITY.synthesizeReport, { sessionId, question, extractions })
 
   // Step N+19: Persist to S3 + update DynamoDB
-  await ctx.callActivity('persistReport', { sessionId: ctx.instanceId, report, pageContents })
-  emit(ctx, 'COMPLETE', { sessionId: ctx.instanceId })
-}
+  await ctx.invoke('persistReport', ACTIVITY.persistReport, { sessionId, userId, report, sources: pageContents })
+
+  await ctx.step('emit-complete', () => emitEvent(...'COMPLETE'...))
+})
 ```
 
-### Retry Policy (all activity steps)
-- Max retries: 3, exponential backoff starting at 2s
-- On final failure: orchestrator emits `PARTIAL_COMPLETE`; synthesis runs on whatever extractions completed; UI shows warning banner
+### Replay Safety Rule
+Any side effect that must not repeat on replay (DynamoDB writes, SNS publishes, etc.) must be inside a `ctx.step()`. `ctx.invoke()` results are also checkpointed — activity Lambdas are never re-invoked if the orchestrator resumes from a checkpoint past that call.
 
 ### Hard Caps
 - Max sources fetched: 8 URLs
-- Max runtime: 10 minutes (orchestrator timeout)
+- Max durable execution timeout: 10 minutes (`durableConfig.executionTimeout`)
+- Per-invocation Lambda timeout: 30 s (the durable runtime suspends between `ctx.invoke()` calls; no compute is billed while waiting)
 
 ---
 
@@ -277,17 +274,17 @@ No durable functions — simple Lambda streaming invocation.
 
 New users cannot use the app until an admin manually approves them.
 
-**Registration (automatic):**
-1. User signs in with Google for the first time — Cognito `PostAuthentication` trigger fires
-2. Trigger Lambda (`cognitoPostAuth`) writes a record to the `UserApprovals` DynamoDB table:
-   `{ userId (PK), email, status: 'pending', registeredAt }`
-3. Lambda publishes to an SNS topic (`NewUserRegistrationTopic`), which emails the admin (`ADMIN_EMAIL` env var) with the user's name, email, and a one-click approval link
+**Registration + approval gate — both handled by `PreTokenGeneration`:**
 
-**Approval gate (enforced on every sign-in):**
-- Cognito `PreTokenGeneration` trigger fires before any token is issued
-- Trigger Lambda (`cognitoPreTokenGen`) queries `UserApprovals` for the user's `status`
-- If `status !== 'approved'`: throws a custom error (`USER_PENDING_APPROVAL`) — Cognito rejects the sign-in and the frontend shows "Your account is pending admin approval."
-- If `status === 'approved'`: no-op, token issuance proceeds normally
+> **Note**: Cognito's `PostAuthentication` trigger does **not** fire for Hosted UI + Google federated sign-ins. All sign-in logic lives in a single `PreTokenGeneration` trigger (`cognitoPreTokenGen`).
+
+1. User signs in with Google — Cognito fires the `PreTokenGeneration` trigger before issuing any token
+2. Lambda queries `UserApprovals` for the user's Cognito `sub` (UUID)
+3. **First-time user** (no record found): Lambda writes `{ userId (sub), email, name, status: 'pending', registeredAt }` to `UserApprovals` (conditional put — idempotent on replay), then publishes to `NewUserRegistrationTopic` → admin email with approval link. Throws `USER_PENDING_APPROVAL` — Cognito rejects the sign-in.
+4. **Returning pending user**: throws `USER_PENDING_APPROVAL` — same rejection.
+5. **Approved user**: no-op — token issuance proceeds normally.
+
+The `userId` key in `UserApprovals` is always the Cognito `sub` (a UUID), **not** the federated username (`Google_<id>`).
 
 **Admin approval endpoint:**
 
@@ -326,11 +323,12 @@ Admin routes are on a separate API Gateway HTTP API stage secured by **IAM auth*
 ### Lambda Runtime Configs
 All functions: Node.js 22, ARM64 (Graviton)
 
-| Function | Memory | Timeout |
-|----------|--------|---------|
-| `synthesizeReport` | 3008 MB | 10 min |
-| `fetchPage` | 512 MB | 30 s |
-| All others | 512 MB | 30 s |
+| Function | Memory | Invocation timeout | Notes |
+|----------|--------|--------------------|-------|
+| `synthesizeReport` | 3008 MB | 10 min | Extended thinking; single synchronous invocation |
+| `fetchPage` | 512 MB | 30 s | |
+| `researchOrchestrator` | 512 MB | 30 s | Durable execution timeout: 10 min. Per-invocation timeout is short because the durable runtime suspends between `ctx.invoke()` calls — no compute billed while waiting. |
+| All others | 512 MB | 30 s | |
 
 ---
 

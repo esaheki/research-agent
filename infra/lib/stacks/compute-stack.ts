@@ -374,11 +374,12 @@ export class ResearchAgentComputeStack extends cdk.Stack {
       entry: path.join(REPO_ROOT, 'backend/src/api/startResearch.ts'),
       environment: {
         SESSIONS_TABLE: sessionsTable.tableName,
-        ORCHESTRATOR_FUNCTION_NAME: orchestrator.handler.functionName,
+        // Durable functions require invocation via a qualified ARN (alias or version)
+        ORCHESTRATOR_FUNCTION_NAME: orchestrator.aliasArn,
       },
     })
     sessionsTable.grantReadWriteData(startResearchFn)
-    orchestrator.handler.grantInvoke(startResearchFn)
+    orchestrator.alias.grantInvoke(startResearchFn)
 
     const cancelResearchFn = new nodejs.NodejsFunction(this, 'CancelResearch', {
       ...fnDefaults,

@@ -10,6 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "@aws-sdk/client-apigatewaymanagementapi": "^3.0.0",
+    "@aws-sdk/client-cloudfront": "^3.0.0",
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/client-lambda": "^3.0.0",
     "@aws-sdk/client-s3": "^3.0.0",
@@ -17,10 +18,11 @@
     "@aws-sdk/client-ssm": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@aws-sdk/s3-request-presigner": "^3.1053.0",
-    "@aws-sdk/client-cloudfront": "^3.0.0",
-    "@aws-sdk/util-dynamodb": "^3.0.0"
+    "@aws-sdk/util-dynamodb": "^3.0.0",
+    "@aws/durable-execution-sdk-js": "^1.1.5"
   },
   "devDependencies": {
+    "@aws/durable-execution-sdk-js-testing": "^1.1.1",
     "@types/aws-lambda": "^8.10.0",
     "@types/jest": "^29.0.0",
     "@types/node": "^22.0.0",

@@ -1,6 +1,6 @@
+import { withDurableExecution, DurableContext } from '@aws/durable-execution-sdk-js'
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { emitEvent } from '../lib/events'
 import { log } from '../lib/logger'
 import { TavilyResult } from '../activities/tavilySearch'
@@ -8,42 +8,11 @@ import { ExtractionResult } from '../activities/extractKeyPoints'
 import { FetchPageResult } from '../activities/fetchPage'
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}))
-const lambdaClient = new LambdaClient({})
 
 export interface OrchestratorInput {
   sessionId: string
   userId: string
   question: string
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function callActivity<T>(functionName: string, payload: unknown, retries = 3): Promise<T> {
-  let lastError: Error | undefined
-  for (let attempt = 0; attempt < retries; attempt++) {
-    if (attempt > 0) await sleep(Math.pow(2, attempt - 1) * 2000)
-    try {
-      const result = await lambdaClient.send(
-        new InvokeCommand({
-          FunctionName: functionName,
-          InvocationType: 'RequestResponse',
-          Payload: JSON.stringify(payload),
-        }),
-      )
-      if (result.FunctionError) {
-        const errPayload = JSON.parse(Buffer.from(result.Payload!).toString()) as {
-          errorMessage?: string
-        }
-        throw new Error(errPayload.errorMessage ?? 'Activity invocation error')
-      }
-      return JSON.parse(Buffer.from(result.Payload!).toString()) as T
-    } catch (err) {
-      lastError = err as Error
-    }
-  }
-  throw lastError
 }
 
 async function updateSessionStatus(
@@ -62,11 +31,10 @@ async function updateSessionStatus(
   )
 }
 
-export const handler = async (event: OrchestratorInput): Promise<void> => {
+export const handler = withDurableExecution(async (event: OrchestratorInput, ctx: DurableContext) => {
   const { sessionId, userId, question } = event
   const failedSteps: string[] = []
 
-  // Read env vars at invocation time so tests can set them in beforeAll/beforeEach
   const EVENTS_TABLE = process.env.EVENTS_TABLE!
   const SESSIONS_TABLE = process.env.SESSIONS_TABLE!
   const ACTIVITY = {
@@ -85,16 +53,30 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
 
   try {
     // Step 1: Decompose query
-    await emitEvent(ddb, EVENTS_TABLE, sessionId, 'DECOMPOSING', { question })
-    const subQueries = await callActivity<string[]>(ACTIVITY.decomposeQuery, { question })
+    // emitEvent is a DynamoDB write — wrap in a step so it's checkpointed and
+    // won't re-execute on replay when the orchestrator resumes after each invoke.
+    await ctx.step('emit-decomposing', async () => {
+      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'DECOMPOSING', { question })
+    })
+    const subQueries = await ctx.invoke<{ question: string }, string[]>(
+      'decomposeQuery',
+      ACTIVITY.decomposeQuery,
+      { question },
+    )
 
     // Steps 2..N: Tavily search per sub-query
     const searchResults: TavilyResult[] = []
     for (let i = 0; i < subQueries.length; i++) {
       const query = subQueries[i]
-      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'SEARCHING', { query, queryIndex: i })
+      await ctx.step(`emit-searching-${i}`, async () => {
+        await emitEvent(ddb, EVENTS_TABLE, sessionId, 'SEARCHING', { query, queryIndex: i })
+      })
       try {
-        const results = await callActivity<TavilyResult[]>(ACTIVITY.tavilySearch, { query })
+        const results = await ctx.invoke<{ query: string }, TavilyResult[]>(
+          `tavilySearch-${i}`,
+          ACTIVITY.tavilySearch,
+          { query },
+        )
         searchResults.push(...results)
       } catch {
         failedSteps.push(`tavilySearch:${i}`)
@@ -102,11 +84,13 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
     }
 
     // Step N+1: Rank and deduplicate URLs
-    await emitEvent(ddb, EVENTS_TABLE, sessionId, 'RANKING_SOURCES', {})
-    const rankedUrls = await callActivity<string[]>(ACTIVITY.rankUrls, {
-      question,
-      searchResults,
+    await ctx.step('emit-ranking', async () => {
+      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'RANKING_SOURCES', {})
     })
+    const rankedUrls = await ctx.invoke<
+      { question: string; searchResults: TavilyResult[] },
+      string[]
+    >('rankUrls', ACTIVITY.rankUrls, { question, searchResults })
     const topUrls = rankedUrls.slice(0, 8)
 
     // Steps N+2..N+9: Fetch pages
@@ -117,14 +101,16 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
       try {
         domain = new URL(url).hostname
       } catch {
-        // keep original url as domain label
+        /* keep original url as domain label */
       }
-      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'FETCHING_PAGE', {
-        url,
-        domain,
-        pageIndex: i,
+      await ctx.step(`emit-fetching-${i}`, async () => {
+        await emitEvent(ddb, EVENTS_TABLE, sessionId, 'FETCHING_PAGE', { url, domain, pageIndex: i })
       })
-      const result = await callActivity<FetchPageResult>(ACTIVITY.fetchPage, { url })
+      const result = await ctx.invoke<{ url: string }, FetchPageResult>(
+        `fetchPage-${i}`,
+        ACTIVITY.fetchPage,
+        { url },
+      )
       pageContents.push(result)
     }
 
@@ -133,12 +119,14 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
     for (let i = 0; i < pageContents.length; i++) {
       const page = pageContents[i]
       if (!page.content) continue
-      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'EXTRACTING', {
-        url: page.url,
-        pageIndex: i,
+      await ctx.step(`emit-extracting-${i}`, async () => {
+        await emitEvent(ddb, EVENTS_TABLE, sessionId, 'EXTRACTING', { url: page.url, pageIndex: i })
       })
       try {
-        const extraction = await callActivity<ExtractionResult>(ACTIVITY.extractKeyPoints, {
+        const extraction = await ctx.invoke<
+          { question: string; url: string; content: string },
+          ExtractionResult
+        >(`extractKeyPoints-${i}`, ACTIVITY.extractKeyPoints, {
           question,
           url: page.url,
           content: page.content,
@@ -154,25 +142,30 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
     }
 
     // Step N+18: Synthesize report (Claude Sonnet + extended thinking)
-    await emitEvent(ddb, EVENTS_TABLE, sessionId, 'SYNTHESIZING', {})
-    const { report } = await callActivity<{ report: string }>(ACTIVITY.synthesizeReport, {
-      sessionId,
-      question,
-      extractions,
+    await ctx.step('emit-synthesizing', async () => {
+      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'SYNTHESIZING', {})
     })
+    const { report } = await ctx.invoke<
+      { sessionId: string; question: string; extractions: ExtractionResult[] },
+      { report: string }
+    >('synthesizeReport', ACTIVITY.synthesizeReport, { sessionId, question, extractions })
 
     // Step N+19: Persist to S3 + DynamoDB
-    await callActivity(ACTIVITY.persistReport, { sessionId, userId, report, sources: pageContents })
+    await ctx.invoke('persistReport', ACTIVITY.persistReport, {
+      sessionId,
+      userId,
+      report,
+      sources: pageContents,
+    })
 
     const finalStatus = failedSteps.length > 0 ? 'partial-complete' : 'complete'
-    if (finalStatus === 'partial-complete') {
-      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'PARTIAL_COMPLETE', {
-        sessionId,
-        failedSteps,
-      })
-    } else {
-      await emitEvent(ddb, EVENTS_TABLE, sessionId, 'COMPLETE', { sessionId })
-    }
+    await ctx.step('emit-complete', async () => {
+      if (finalStatus === 'partial-complete') {
+        await emitEvent(ddb, EVENTS_TABLE, sessionId, 'PARTIAL_COMPLETE', { sessionId, failedSteps })
+      } else {
+        await emitEvent(ddb, EVENTS_TABLE, sessionId, 'COMPLETE', { sessionId })
+      }
+    })
 
     await updateSessionStatus(SESSIONS_TABLE, sessionId, finalStatus)
     log({
@@ -195,4 +188,4 @@ export const handler = async (event: OrchestratorInput): Promise<void> => {
     })
     throw err
   }
-}
+})

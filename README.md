@@ -93,7 +93,7 @@ npm ci
 npm run dev       # http://localhost:5173
 ```
 
-Set `VITE_API_URL` and `VITE_WS_URL` in `frontend/.env.local` to point at your deployed API Gateway endpoints (or a local mock).
+Copy `frontend/.env.example` to `frontend/.env.local` and fill in your deployed API Gateway and Cognito values.
 
 ### Backend
 
@@ -104,7 +104,7 @@ npm run build
 npm run test
 ```
 
-Individual Lambda functions can be invoked locally with the AWS SAM CLI or by writing unit tests against the handler directly. The Durable orchestrator requires a deployed environment to run end-to-end.
+Individual Lambda functions can be invoked locally with the AWS SAM CLI or by writing unit tests against the handler directly. The orchestrator uses the official AWS Lambda Durable Functions SDK (`@aws/durable-execution-sdk-js`); end-to-end testing requires a deployed environment with `durableConfig` enabled. Integration tests can use `LocalDurableTestRunner` from `@aws/durable-execution-sdk-js-testing`.
 
 ---
 
