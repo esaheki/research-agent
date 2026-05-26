@@ -59,7 +59,7 @@ export function HistoryPage() {
   }, [])
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px 20px' }}>
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '24px 20px', minHeight: '100dvh', width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
         <Link to="/research" style={{ color: 'var(--color-primary)', fontSize: '14px' }}>
           ← Back

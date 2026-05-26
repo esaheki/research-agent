@@ -103,7 +103,7 @@ export function ResearchPage({ onLogout }: ResearchPageProps) {
   const isStarting = isSubmitting || (sessionId !== null && events.length === 0 && isRunning)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       {/* Header */}
       <header
         style={{

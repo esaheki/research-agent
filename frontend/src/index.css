@@ -243,8 +243,9 @@ a:hover {
 }
 .chat-markdown strong { font-weight: 600; }
 
+/* #root has no fixed height — app-shell pages set their own height: 100dvh.
+   Scrollable pages (HistoryPage, HomePage) grow naturally and body scrolls. */
 #root {
-  height: 100vh;
   display: flex;
   flex-direction: column;
 }

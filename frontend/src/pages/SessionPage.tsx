@@ -167,7 +167,7 @@ export function SessionPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
       {/* Header */}
       <header
         style={{
@@ -202,7 +202,7 @@ export function SessionPage() {
 
       {/* Report + Chat */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
           <ReportViewer
             markdown={reportMarkdown}
             isPartial={session?.status === 'partial-complete'}
