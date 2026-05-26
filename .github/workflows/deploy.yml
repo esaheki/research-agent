@@ -45,7 +45,7 @@ jobs:
 
       - name: Build frontend
         run: |
-          OUTPUTS=infra/cdk-outputs.json
+          OUTPUTS=../infra/cdk-outputs.json
           HTTP_API=$(jq -r '.ResearchAgentComputeStack.HttpApiUrl' "$OUTPUTS")
           WS_API=$(jq -r '.ResearchAgentComputeStack.WebSocketApiUrl' "$OUTPUTS")
           COGNITO_DOMAIN=$(jq -r '.ResearchAgentComputeStack.CognitoDomain' "$OUTPUTS")
