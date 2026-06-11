@@ -1,33 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { handleCallback } from '../lib/cognito'
+import { handleCallback, redirectToLogin } from '../lib/cognito'
+
+type CallbackState = 'loading' | 'pending' | 'error'
 
 export function CallbackPage() {
   const navigate = useNavigate()
   const handledRef = useRef(false)
-  const [pending, setPending] = useState(false)
+  const [state, setState] = useState<CallbackState>('loading')
 
   useEffect(() => {
     if (handledRef.current) return
     handledRef.current = true
 
-    const params = new URLSearchParams(window.location.search)
-    const hasCode = params.has('code')
-
     void (async () => {
-      const tokens = await handleCallback()
-      if (tokens) {
+      const result = await handleCallback()
+      if (result && result !== 'pending') {
         navigate('/research', { replace: true })
-      } else if (hasCode) {
-        // Auth code was present but token exchange was blocked — account is pending approval.
-        setPending(true)
+      } else if (result === 'pending') {
+        setState('pending')
       } else {
-        navigate('/research', { replace: true })
+        setState('error')
       }
     })()
   }, [navigate])
 
-  if (pending) {
+  if (state === 'pending') {
     return (
       <div
         style={{
@@ -47,6 +45,44 @@ export function CallbackPage() {
           Your account has been registered and the admin has been notified. You'll be able to sign
           in once your account is approved.
         </p>
+      </div>
+    )
+  }
+
+  if (state === 'error') {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100vh',
+          flexDirection: 'column',
+          gap: '16px',
+          textAlign: 'center',
+          padding: '0 24px',
+        }}
+      >
+        <p style={{ fontSize: '2rem' }}>⚠️</p>
+        <h2 style={{ margin: 0 }}>Sign-in failed</h2>
+        <p style={{ color: 'var(--color-text-secondary)', maxWidth: '400px' }}>
+          Something went wrong during sign-in. This can happen if the page was refreshed mid-flow.
+        </p>
+        <button
+          onClick={() => void redirectToLogin()}
+          style={{
+            marginTop: '8px',
+            padding: '10px 24px',
+            borderRadius: '6px',
+            border: 'none',
+            background: 'var(--color-accent)',
+            color: '#fff',
+            cursor: 'pointer',
+            fontSize: '1rem',
+          }}
+        >
+          Try signing in again
+        </button>
       </div>
     )
   }

@@ -54,15 +54,13 @@ export async function redirectToLogin(): Promise<void> {
   window.location.href = `https://${config.cognitoDomain}/oauth2/authorize?${params.toString()}`
 }
 
-export async function handleCallback(): Promise<Tokens | null> {
+export async function handleCallback(): Promise<Tokens | 'pending' | null> {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
   if (!code) return null
 
   const codeVerifier = sessionStorage.getItem(CODE_VERIFIER_KEY)
   if (!codeVerifier) return null
-
-  sessionStorage.removeItem(CODE_VERIFIER_KEY)
 
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
@@ -79,9 +77,14 @@ export async function handleCallback(): Promise<Tokens | null> {
   })
 
   if (!res.ok) {
-    console.error('Token exchange failed', await res.text())
-    return null
+    const errorText = await res.text()
+    console.error('Token exchange failed', errorText)
+    return errorText.includes('USER_PENDING_APPROVAL') ? 'pending' : null
   }
+
+  // Remove only after a successful exchange so a page refresh during a slow
+  // cold-start response doesn't permanently lose the verifier.
+  sessionStorage.removeItem(CODE_VERIFIER_KEY)
 
   const data = (await res.json()) as {
     id_token: string
