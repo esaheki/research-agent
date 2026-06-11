@@ -10,6 +10,10 @@ interface Tokens {
 const TOKENS_KEY = 'research_agent_tokens'
 const CODE_VERIFIER_KEY = 'pkce_code_verifier'
 
+// Tokens stay in sessionStorage (tab-scoped). The code verifier uses localStorage
+// because some browsers (Safari ITP, session-restore) clear sessionStorage during
+// the cross-domain OAuth redirect chain before the callback page can read it.
+
 // ---- PKCE helpers ----
 
 function generateRandomString(length: number): string {
@@ -37,7 +41,7 @@ async function sha256(plain: string): Promise<ArrayBuffer> {
 
 export async function redirectToLogin(): Promise<void> {
   const codeVerifier = generateRandomString(64)
-  sessionStorage.setItem(CODE_VERIFIER_KEY, codeVerifier)
+  localStorage.setItem(CODE_VERIFIER_KEY, codeVerifier)
 
   const hash = await sha256(codeVerifier)
   const codeChallenge = base64urlEncode(hash)
@@ -59,7 +63,7 @@ export async function handleCallback(): Promise<Tokens | 'pending' | null> {
   const code = params.get('code')
   if (!code) return null
 
-  const codeVerifier = sessionStorage.getItem(CODE_VERIFIER_KEY)
+  const codeVerifier = localStorage.getItem(CODE_VERIFIER_KEY)
   if (!codeVerifier) return null
 
   const body = new URLSearchParams({
@@ -82,9 +86,7 @@ export async function handleCallback(): Promise<Tokens | 'pending' | null> {
     return errorText.includes('USER_PENDING_APPROVAL') ? 'pending' : null
   }
 
-  // Remove only after a successful exchange so a page refresh during a slow
-  // cold-start response doesn't permanently lose the verifier.
-  sessionStorage.removeItem(CODE_VERIFIER_KEY)
+  localStorage.removeItem(CODE_VERIFIER_KEY)
 
   const data = (await res.json()) as {
     id_token: string
@@ -120,7 +122,7 @@ export function getStoredTokens(): Tokens | null {
 
 export function clearTokens(): void {
   sessionStorage.removeItem(TOKENS_KEY)
-  sessionStorage.removeItem(CODE_VERIFIER_KEY)
+  localStorage.removeItem(CODE_VERIFIER_KEY)
 }
 
 export function redirectToLogout(): void {
