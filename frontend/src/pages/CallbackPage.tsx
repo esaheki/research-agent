@@ -13,14 +13,19 @@ export function CallbackPage() {
     if (handledRef.current) return
     handledRef.current = true
 
+    const hasCode = new URLSearchParams(window.location.search).has('code')
+
     void (async () => {
       const result = await handleCallback()
       if (result && result !== 'pending') {
         navigate('/research', { replace: true })
       } else if (result === 'pending') {
         setState('pending')
-      } else {
+      } else if (hasCode) {
+        // A code was present but the exchange failed (expired code, missing verifier, etc.)
         setState('error')
+      } else {
+        navigate('/research', { replace: true })
       }
     })()
   }, [navigate])
