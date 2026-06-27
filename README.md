@@ -177,3 +177,4 @@ Each research session costs roughly **$0.10–0.25**:
 | Jina Reader | Free tier |
 | Claude Haiku 4.5 (decompose, rank, extract × 8) | ~$0.01 |
 | Claude Sonnet 4.6 + extended thinking (synthesis) | ~$0.05–0.15 |
+
